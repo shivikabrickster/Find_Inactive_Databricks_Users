@@ -58,11 +58,11 @@ The one false-positive path is a login that is not counted: if your single sign-
 
 If your environment cannot reach `accounts.cloud.databricks.com` (for example, PrivateLink-only with no internet egress), use the workspace-hosted account SCIM endpoint `{workspace-url}/api/2.0/account/scim/v2/` over front-end PrivateLink. It exposes the same account-level Users and Groups, so only the roster and disable steps change; the audit queries are unchanged. The notebook includes ready-to-use alternative cells at the end for this path.
 
-**Auth (set up in workspace settings, no account console needed):** create a service principal under **Settings > Identity and access > Service principals**, grant it **Admin access** (workspace admin), and generate an OAuth secret on its **Secrets** tab (the Application Id is the client ID). Authenticate with OAuth client credentials at `{workspace-url}/oidc/v1/token` (OAuth is preferred over personal access tokens).
+**Auth (set up from workspace admin settings):** create a service principal under **Settings > Identity and access > Service principals**, grant it **Admin access** (workspace admin), and generate an OAuth secret on its **Secrets** tab (the Application Id is the client ID). Authenticate with OAuth client credentials at `{workspace-url}/oidc/v1/token` (OAuth is preferred over personal access tokens).
 
 Notes:
-- The path sets the scope: `PATCH active=false` on `/api/2.0/account/scim/v2/Users/{id}` deactivates at the account level (across the account and all workspaces); `/api/2.0/preview/scim/v2/Users/{id}` deactivates in that workspace only.
-- The workspace must be identity-federated (the default).
+- The path sets the scope: use the account-level path `/api/2.0/account/scim/v2/` so `PATCH active=false` applies across the account and all workspaces; the workspace-level Workspace Users API (`/api/2.0/preview/scim/v2/`) deactivates in that workspace only.
+- Requires an identity-federated workspace, the default for new workspaces and most existing ones.
 - On a non-critical user, validate that the deactivation behaves account-wide before automating, and confirm the roster count matches your account total.
 
 ## Notes

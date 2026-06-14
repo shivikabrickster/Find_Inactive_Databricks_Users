@@ -237,11 +237,11 @@ for email, uid in targets:
 # MAGIC ## Alternative: intranet / PrivateLink (no access to the account host)
 # MAGIC If this environment cannot reach `accounts.cloud.databricks.com` (for example, PrivateLink-only with no internet egress), use the **workspace-hosted account SCIM endpoint** `{workspace-url}/api/2.0/account/scim/v2/`, reached over front-end PrivateLink. It exposes the same account-level Users and Groups, so only the roster (Cell 1) and the disable (Cell 5) change; the audit queries (Cells 2-4) are unchanged.
 # MAGIC
-# MAGIC **Auth (set up in workspace settings, no account console needed):** create a service principal under Settings -> Identity and access -> Service principals, grant it Admin access (workspace admin), and generate an OAuth secret on its Secrets tab (the Application Id is the client ID). Authenticate with OAuth client credentials at `{workspace-url}/oidc/v1/token` (OAuth is preferred over personal access tokens). Set `WORKSPACE_URL`, then use the two cells below in place of Cells 1 and 5.
+# MAGIC **Auth (set up from workspace admin settings):** create a service principal under Settings -> Identity and access -> Service principals, grant it Admin access (workspace admin), and generate an OAuth secret on its Secrets tab (the Application Id is the client ID). Authenticate with OAuth client credentials at `{workspace-url}/oidc/v1/token` (OAuth is preferred over personal access tokens). Set `WORKSPACE_URL`, then use the two cells below in place of Cells 1 and 5.
 # MAGIC
 # MAGIC **Notes:**
-# MAGIC - The path sets the scope: `PATCH active=false` on `/api/2.0/account/scim/v2/Users/{id}` deactivates at the account level (across the account and all workspaces, which CAM needs); `/api/2.0/preview/scim/v2/Users/{id}` deactivates in this workspace only.
-# MAGIC - The workspace must be identity-federated (the default).
+# MAGIC - The path sets the scope: use the account-level path `/api/2.0/account/scim/v2/` so `PATCH active=false` applies across the account and all workspaces (which CAM needs); the workspace-level Workspace Users API (`/api/2.0/preview/scim/v2/`) deactivates in that workspace only.
+# MAGIC - Requires an identity-federated workspace, the default for new workspaces and most existing ones.
 # MAGIC - On a non-critical user, validate that the deactivation behaves account-wide before automating, and confirm the printed count matches your account total.
 
 # COMMAND ----------
