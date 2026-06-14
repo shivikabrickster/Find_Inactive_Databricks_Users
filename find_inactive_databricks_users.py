@@ -235,9 +235,16 @@ for email, uid in targets:
 
 # MAGIC %md
 # MAGIC ## Alternative: intranet / PrivateLink (no access to the account host)
-# MAGIC If this environment cannot reach `accounts.cloud.databricks.com` (for example, PrivateLink-only with no internet egress), use the **workspace-hosted account SCIM endpoint** `{workspace-url}/api/2.0/account/scim/v2/`, authenticated with a **workspace-admin PAT**, reached over front-end PrivateLink. It exposes the same account-level Users and Groups, so only the roster (Cell 1) and the disable (Cell 5) change; the audit queries (Cells 2-4) are unchanged. Deactivation through this endpoint still applies account-wide.
+# MAGIC If this environment cannot reach `accounts.cloud.databricks.com` (for example, PrivateLink-only with no internet egress), use the **workspace-hosted account SCIM endpoint** `{workspace-url}/api/2.0/account/scim/v2/`, reached over front-end PrivateLink. It exposes the same account-level Users and Groups, so only the roster (Cell 1) and the disable (Cell 5) change; the audit queries (Cells 2-4) are unchanged.
 # MAGIC
-# MAGIC Setup: store a workspace-admin PAT as a secret (`workspace-admin-pat`), set `WORKSPACE_URL`, then use the two cells below in place of Cells 1 and 5. On the first run, confirm the printed count matches your account total (the `/account/` path returns all account users; the legacy `/api/2.0/scim/v2/` path, without `/account/`, would return only this workspace's users).
+# MAGIC **Auth:** use the service principal with **OAuth M2M** against the workspace token endpoint `{workspace-url}/oidc/v1/token` (client-credentials). The SP must be added to this workspace as a **workspace admin**. OAuth is preferred over personal access tokens. Set `WORKSPACE_URL`, then use the two cells below in place of Cells 1 and 5.
+# MAGIC
+# MAGIC **Before relying on this path:**
+# MAGIC - **Account-wide power.** Deactivation here applies across the whole account, so whoever holds this service principal effectively has account-wide identity-revocation rights. Restrict who holds it and monitor `deactivateUser` audit events.
+# MAGIC - **Privilege ceiling is undocumented.** It is not documented whether a workspace admin can deactivate an account admin or another workspace admin through this proxy. Validate that edge case before depending on any guardrail.
+# MAGIC - **Use the right path.** `/api/2.0/account/scim/v2/Users/{id}` deactivates account-wide; `/api/2.0/preview/scim/v2/Users/{id}` deactivates in this workspace only. One wrong segment silently changes the scope.
+# MAGIC - **Identity federation required.** This proxy assumes an identity-federated workspace (the default for recent workspaces). Legacy non-federated workspaces only have `/api/2.0/preview/scim/v2/`.
+# MAGIC - On the first run, confirm the printed count matches your account total.
 
 # COMMAND ----------
 
@@ -245,7 +252,14 @@ for email, uid in targets:
 import requests
 
 WORKSPACE_URL = "https://<your-workspace>.cloud.databricks.com"
-WS_HEADERS = {"Authorization": f"Bearer {dbutils.secrets.get(SECRET_SCOPE, 'workspace-admin-pat')}"}
+# OAuth M2M for the service principal against the WORKSPACE token endpoint (SP must be a workspace admin here)
+ws_token = requests.post(
+    f"{WORKSPACE_URL}/oidc/v1/token",
+    auth=(dbutils.secrets.get(SECRET_SCOPE, CLIENT_ID_KEY),
+          dbutils.secrets.get(SECRET_SCOPE, CLIENT_SECRET_KEY)),
+    data={"grant_type": "client_credentials", "scope": "all-apis"},
+).json()["access_token"]
+WS_HEADERS = {"Authorization": f"Bearer {ws_token}"}
 
 users, start = [], 1
 while True:
@@ -274,7 +288,12 @@ import requests
 DRY_RUN  = True
 TEST_ONE = True
 WORKSPACE_URL = "https://<your-workspace>.cloud.databricks.com"
-PAT = dbutils.secrets.get(SECRET_SCOPE, "workspace-admin-pat")
+ws_token = requests.post(
+    f"{WORKSPACE_URL}/oidc/v1/token",
+    auth=(dbutils.secrets.get(SECRET_SCOPE, CLIENT_ID_KEY),
+          dbutils.secrets.get(SECRET_SCOPE, CLIENT_SECRET_KEY)),
+    data={"grant_type": "client_credentials", "scope": "all-apis"},
+).json()["access_token"]
 
 body = {
     "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
@@ -292,11 +311,11 @@ for email, uid in targets:
         continue
     resp = requests.patch(
         f"{WORKSPACE_URL}/api/2.0/account/scim/v2/Users/{uid}",
-        headers={"Authorization": f"Bearer {PAT}", "Content-Type": "application/scim+json"},
+        headers={"Authorization": f"Bearer {ws_token}", "Content-Type": "application/scim+json"},
         json=body,
     )
     check = requests.get(
         f"{WORKSPACE_URL}/api/2.0/account/scim/v2/Users/{uid}",
-        headers={"Authorization": f"Bearer {PAT}"},
+        headers={"Authorization": f"Bearer {ws_token}"},
     ).json()
     print(f"{email}: patch={resp.status_code} active={check.get('active')}")
