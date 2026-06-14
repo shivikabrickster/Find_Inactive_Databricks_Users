@@ -237,14 +237,12 @@ for email, uid in targets:
 # MAGIC ## Alternative: intranet / PrivateLink (no access to the account host)
 # MAGIC If this environment cannot reach `accounts.cloud.databricks.com` (for example, PrivateLink-only with no internet egress), use the **workspace-hosted account SCIM endpoint** `{workspace-url}/api/2.0/account/scim/v2/`, reached over front-end PrivateLink. It exposes the same account-level Users and Groups, so only the roster (Cell 1) and the disable (Cell 5) change; the audit queries (Cells 2-4) are unchanged.
 # MAGIC
-# MAGIC **Auth:** use the service principal with **OAuth M2M** against the workspace token endpoint `{workspace-url}/oidc/v1/token` (client-credentials). The SP must be added to this workspace as a **workspace admin**. OAuth is preferred over personal access tokens. Set `WORKSPACE_URL`, then use the two cells below in place of Cells 1 and 5.
+# MAGIC **Auth (set up in workspace settings, no account console needed):** create a service principal under Settings -> Identity and access -> Service principals, grant it Admin access (workspace admin), and generate an OAuth secret on its Secrets tab (the Application Id is the client ID). Authenticate with OAuth client credentials at `{workspace-url}/oidc/v1/token` (OAuth is preferred over personal access tokens). Set `WORKSPACE_URL`, then use the two cells below in place of Cells 1 and 5.
 # MAGIC
-# MAGIC **Before relying on this path:**
-# MAGIC - **Account-wide power.** Deactivation here applies across the whole account, so whoever holds this service principal effectively has account-wide identity-revocation rights. Restrict who holds it and monitor `deactivateUser` audit events.
-# MAGIC - **Privilege ceiling is undocumented.** It is not documented whether a workspace admin can deactivate an account admin or another workspace admin through this proxy. Validate that edge case before depending on any guardrail.
-# MAGIC - **Use the right path.** `/api/2.0/account/scim/v2/Users/{id}` deactivates account-wide; `/api/2.0/preview/scim/v2/Users/{id}` deactivates in this workspace only. One wrong segment silently changes the scope.
-# MAGIC - **Identity federation required.** This proxy assumes an identity-federated workspace (the default for recent workspaces). Legacy non-federated workspaces only have `/api/2.0/preview/scim/v2/`.
-# MAGIC - On the first run, confirm the printed count matches your account total.
+# MAGIC **Notes:**
+# MAGIC - The path sets the scope: `PATCH active=false` on `/api/2.0/account/scim/v2/Users/{id}` deactivates at the account level (across the account and all workspaces, which CAM needs); `/api/2.0/preview/scim/v2/Users/{id}` deactivates in this workspace only.
+# MAGIC - The workspace must be identity-federated (the default).
+# MAGIC - On a non-critical user, validate that the deactivation behaves account-wide before automating, and confirm the printed count matches your account total.
 
 # COMMAND ----------
 

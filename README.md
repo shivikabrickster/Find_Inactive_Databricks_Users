@@ -56,14 +56,14 @@ The one false-positive path is a login that is not counted: if your single sign-
 
 ## Intranet / PrivateLink (no access to the account host)
 
-If your environment cannot reach `accounts.cloud.databricks.com` (for example, PrivateLink-only with no internet egress), use the workspace-hosted account SCIM endpoint `{workspace-url}/api/2.0/account/scim/v2/` over front-end PrivateLink. Authenticate the service principal with **OAuth (client credentials)** at `{workspace-url}/oidc/v1/token`, with the SP added to the workspace as a **workspace admin** (OAuth is preferred over personal access tokens). It exposes the same account-level Users and Groups, so only the roster and disable steps change; the audit queries are unchanged. The notebook includes ready-to-use alternative cells at the end for this path.
+If your environment cannot reach `accounts.cloud.databricks.com` (for example, PrivateLink-only with no internet egress), use the workspace-hosted account SCIM endpoint `{workspace-url}/api/2.0/account/scim/v2/` over front-end PrivateLink. It exposes the same account-level Users and Groups, so only the roster and disable steps change; the audit queries are unchanged. The notebook includes ready-to-use alternative cells at the end for this path.
 
-Before relying on it:
-- **Account-wide power.** Deactivation here applies across the whole account, so this service principal effectively holds account-wide revocation rights. Restrict who holds it and monitor `deactivateUser` audit events.
-- **Privilege ceiling is undocumented.** It is not documented whether a workspace admin can deactivate an account admin or another workspace admin through this proxy. Validate that edge case first.
-- **Use the right path.** `/api/2.0/account/scim/v2/Users/{id}` deactivates account-wide; `/api/2.0/preview/scim/v2/Users/{id}` deactivates in that workspace only. One wrong segment silently changes the scope.
-- **Identity federation required.** This proxy assumes an identity-federated workspace (the default for recent workspaces); legacy non-federated workspaces only have `/api/2.0/preview/scim/v2/`.
-- On the first run, confirm the roster count matches your account total (the `/account/` path returns all account users).
+**Auth (set up in workspace settings, no account console needed):** create a service principal under **Settings > Identity and access > Service principals**, grant it **Admin access** (workspace admin), and generate an OAuth secret on its **Secrets** tab (the Application Id is the client ID). Authenticate with OAuth client credentials at `{workspace-url}/oidc/v1/token` (OAuth is preferred over personal access tokens).
+
+Notes:
+- The path sets the scope: `PATCH active=false` on `/api/2.0/account/scim/v2/Users/{id}` deactivates at the account level (across the account and all workspaces); `/api/2.0/preview/scim/v2/Users/{id}` deactivates in that workspace only.
+- The workspace must be identity-federated (the default).
+- On a non-critical user, validate that the deactivation behaves account-wide before automating, and confirm the roster count matches your account total.
 
 ## Notes
 
