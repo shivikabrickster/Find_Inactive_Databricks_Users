@@ -61,7 +61,7 @@ If your environment cannot reach `accounts.cloud.databricks.com` (for example, P
 **Auth (set up from workspace admin settings):** create a service principal under **Settings > Identity and access > Service principals**, grant it **Admin access** (workspace admin), and generate an OAuth secret on its **Secrets** tab (the Application Id is the client ID). Authenticate with OAuth client credentials at `{workspace-url}/oidc/v1/token` (OAuth is preferred over personal access tokens).
 
 Notes:
-- The path sets the scope: use the account-level path `/api/2.0/account/scim/v2/` so `PATCH active=false` applies across the account and all workspaces; the workspace-level Workspace Users API (`/api/2.0/preview/scim/v2/`) deactivates in that workspace only.
+- Deactivation through `{workspace-url}/api/2.0/account/scim/v2/Users/{id}` (`PATCH active=false`) applies across the account and all workspaces, which is what CAM needs.
 - Requires an identity-federated workspace, the default for new workspaces and most existing ones.
 - On a non-critical user, validate that the deactivation behaves account-wide before automating, and confirm the roster count matches your account total.
 

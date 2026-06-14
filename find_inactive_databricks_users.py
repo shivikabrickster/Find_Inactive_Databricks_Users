@@ -240,7 +240,7 @@ for email, uid in targets:
 # MAGIC **Auth (set up from workspace admin settings):** create a service principal under Settings -> Identity and access -> Service principals, grant it Admin access (workspace admin), and generate an OAuth secret on its Secrets tab (the Application Id is the client ID). Authenticate with OAuth client credentials at `{workspace-url}/oidc/v1/token` (OAuth is preferred over personal access tokens). Set `WORKSPACE_URL`, then use the two cells below in place of Cells 1 and 5.
 # MAGIC
 # MAGIC **Notes:**
-# MAGIC - The path sets the scope: use the account-level path `/api/2.0/account/scim/v2/` so `PATCH active=false` applies across the account and all workspaces (which CAM needs); the workspace-level Workspace Users API (`/api/2.0/preview/scim/v2/`) deactivates in that workspace only.
+# MAGIC - Deactivation through `{workspace-url}/api/2.0/account/scim/v2/Users/{id}` (`PATCH active=false`) applies across the account and all workspaces, which is what CAM needs.
 # MAGIC - Requires an identity-federated workspace, the default for new workspaces and most existing ones.
 # MAGIC - On a non-critical user, validate that the deactivation behaves account-wide before automating, and confirm the printed count matches your account total.
 
