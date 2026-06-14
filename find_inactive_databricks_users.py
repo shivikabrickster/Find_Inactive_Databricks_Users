@@ -230,3 +230,73 @@ for email, uid in targets:
 # MAGIC - **What counts as activity.** `tokenLogin` is included, so personal-access-token use counts as activity. For interactive-login-only, remove `tokenLogin` from `LOGIN_ACTIONS`, but note that disabling a token-only user also stops their automation. `oidcTokenAuthorization` is deliberately excluded: it fires on every API call and would mask inactivity.
 # MAGIC - **Re-provisioned users.** The onboarding date is the earliest provisioning event in the window, so a removed-and-re-added user reflects the re-add date.
 # MAGIC - **Authentication.** The service principal must hold the **account admin** role for the Account Users API and the disable call.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Alternative: intranet / PrivateLink (no access to the account host)
+# MAGIC If this environment cannot reach `accounts.cloud.databricks.com` (for example, PrivateLink-only with no internet egress), use the **workspace-hosted account SCIM endpoint** `{workspace-url}/api/2.0/account/scim/v2/`, authenticated with a **workspace-admin PAT**, reached over front-end PrivateLink. It exposes the same account-level Users and Groups, so only the roster (Cell 1) and the disable (Cell 5) change; the audit queries (Cells 2-4) are unchanged. Deactivation through this endpoint still applies account-wide.
+# MAGIC
+# MAGIC Setup: store a workspace-admin PAT as a secret (`workspace-admin-pat`), set `WORKSPACE_URL`, then use the two cells below in place of Cells 1 and 5. On the first run, confirm the printed count matches your account total (the `/account/` path returns all account users; the legacy `/api/2.0/scim/v2/` path, without `/account/`, would return only this workspace's users).
+
+# COMMAND ----------
+
+# Alternative roster: workspace-hosted account SCIM over PrivateLink (no account host)
+import requests
+
+WORKSPACE_URL = "https://<your-workspace>.cloud.databricks.com"
+WS_HEADERS = {"Authorization": f"Bearer {dbutils.secrets.get(SECRET_SCOPE, 'workspace-admin-pat')}"}
+
+users, start = [], 1
+while True:
+    page = requests.get(
+        f"{WORKSPACE_URL}/api/2.0/account/scim/v2/Users",
+        headers=WS_HEADERS,
+        params={"startIndex": start, "count": 100, "attributes": "userName,active,id"},
+    ).json().get("Resources", [])
+    if not page:
+        break
+    for u in page:
+        if u.get("active", True):
+            users.append((u.get("userName", "").lower(), u.get("id")))
+    start += len(page)
+
+print(f"{len(users)} active users")  # confirm this matches your account total
+(spark.createDataFrame(users, "email STRING, user_id STRING")
+      .write.mode("overwrite").saveAsTable(USERS_TABLE))
+
+# COMMAND ----------
+
+# Alternative disable: workspace-hosted account SCIM over PrivateLink (no account host)
+# Same gating as Cell 5; only the base URL and auth differ. Deactivation applies account-wide.
+import requests
+
+DRY_RUN  = True
+TEST_ONE = True
+WORKSPACE_URL = "https://<your-workspace>.cloud.databricks.com"
+PAT = dbutils.secrets.get(SECRET_SCOPE, "workspace-admin-pat")
+
+body = {
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    "Operations": [{"op": "replace", "path": "active", "value": [{"value": "false"}]}],
+}
+safelist = {e.lower() for e in SAFELIST}
+rows = spark.table(CANDIDATES_TABLE).collect()
+targets = [(r["email"], r["user_id"]) for r in rows if r["email"] not in safelist]
+if TEST_ONE:
+    targets = targets[:1]
+
+for email, uid in targets:
+    if DRY_RUN:
+        print(f"[dry-run] would disable {email} ({uid})")
+        continue
+    resp = requests.patch(
+        f"{WORKSPACE_URL}/api/2.0/account/scim/v2/Users/{uid}",
+        headers={"Authorization": f"Bearer {PAT}", "Content-Type": "application/scim+json"},
+        json=body,
+    )
+    check = requests.get(
+        f"{WORKSPACE_URL}/api/2.0/account/scim/v2/Users/{uid}",
+        headers={"Authorization": f"Bearer {PAT}"},
+    ).json()
+    print(f"{email}: patch={resp.status_code} active={check.get('active')}")

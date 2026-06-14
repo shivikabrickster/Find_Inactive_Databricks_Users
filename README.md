@@ -54,10 +54,14 @@ A valid (active) user will not be disabled, by design:
 
 The one false-positive path is a login that is not counted: if your single sign-on logs sign-ins under an action not in the login list, those users look inactive. **Run the discovery cell and confirm your account's login and provisioning actions before trusting the candidates.** `oidcTokenAuthorization` is excluded by design — it fires on every API call and conflates service principals.
 
+## Intranet / PrivateLink (no access to the account host)
+
+If your environment cannot reach `accounts.cloud.databricks.com` (for example, PrivateLink-only with no internet egress), use the workspace-hosted account SCIM endpoint instead: `{workspace-url}/api/2.0/account/scim/v2/`, authenticated with a workspace-admin PAT over front-end PrivateLink. It exposes the same account-level Users and Groups, so only the roster and disable steps change; the audit queries are unchanged, and deactivation still applies account-wide. The notebook includes ready-to-use alternative cells at the end for this path. On the first run, confirm the roster count matches your account total (the `/account/` path returns all account users; the legacy `/api/2.0/scim/v2/` path, without `/account/`, returns only that workspace's users).
+
 ## Notes
 
 - `system.access.audit` is forward-only (365-day retention). A user provisioned before your history began is baselined on the floor and flags only once the span passes 90 days; until then, use audit log delivery files or the identity-provider / HR onboarding date.
-- The service principal must hold the **account admin** role for the Account Users API and the disable call.
+- The service principal must hold the **account admin** role for the Account Users API and the disable call. For the workspace-hosted path above, a **workspace-admin** token is sufficient.
 - Defaults are for AWS (`accounts.cloud.databricks.com`); for Azure use `accounts.azuredatabricks.net`.
 
 ## Disclaimer
